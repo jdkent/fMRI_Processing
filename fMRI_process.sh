@@ -1,4 +1,4 @@
-#!/bin/sh -x
+#!/bin/sh
 ########################################################
 # Name: 
 #	fMRI_process.sh
@@ -183,7 +183,7 @@ function GetNumVols()
 # Preconditions:
 #	the input must be a 4D volume with header information
 # Postconditions:
-#	returns the correct repetition times
+#	returns the correct repetition time
 function GetTR()
 {
 	echo $(3dinfo -verb $1 | grep "Time step" | awk -F" " '{print $10}' | sed 's/\..*$//')
