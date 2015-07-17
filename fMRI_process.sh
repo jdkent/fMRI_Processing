@@ -16,6 +16,7 @@
 #	> Spatially Smoothed (FSL)
 #	> Highpass Filtered (AFNI)
 #	> temporally scaled (AFNI)
+#	> Registered to standard space (FSL)
 # Preconditions
 #	No further preconditions
 #Postconditions
