@@ -356,8 +356,8 @@ function SkullStrip()
 ########################################################
 # Name: FindOutlierVols
 # Purpose:
-#	Finds 3D images in a 4D functional volume that have a lot of voxels outside 
-#	2 standard deviations from the mean
+#	Goes through each 3D image in a 4D Volume to find images with 
+#	a significant amount of voxels that are outliers
 # Parameters:
 # 	$1=functional scan, 4D Volume
 # Produces:
@@ -547,7 +547,24 @@ function SpatialSmooth()
 
 
 
-
+#######################################################
+# Name: Scale
+# Purpose:
+#	Temporally scales each voxel to have a mean of 100 across the
+#	timeseries. range [0,200]
+# Parameters:
+# 	$1=functional scan, 4D Volume (motion corrected,masked,spatially smoothed)
+#	$2=mean_func, 3D image
+#	$3=outDir, output directory (optional)
+# Produces:
+#	scaleName, a 4D Volume
+# Preconditions:
+#	4D volume must exist.
+#	Depends on
+#			  > GetName
+#			  > clobber
+# Postconditions:
+#	no further postconditions
 function Scale()
 {
 	if [ "$3" == "" ]; then
@@ -566,7 +583,26 @@ function Scale()
 	#else
 	return 1
 }
+#######################################################
 
+
+#######################################################
+# Name: Registration_epi2std
+# Purpose:
+#	Registers the epi data to standard space for group analysis
+# Parameters:
+# 	$1=functional scan, 4D Volume (motion corrected,masked,spatially smoothed)
+#	$2=anatomical scan, a 3D image
+#	$3=outDir, output directory (optional)
+# Produces:
+#	affine matrices and warps to move from subject space to standard space
+# Preconditions:
+#	4D volume must exist.
+#	Depends on
+#			  > GetName
+#			  > clobber
+# Postconditions:
+#	no further postconditions
 function Registration_epi2std()
 {	
 	if [ "$3" == "" ]; then
@@ -574,16 +610,32 @@ function Registration_epi2std()
 	else
 		local outDir=$3
 	fi
+	T1_mask=${outDir}/${Name}_bc_mask_60_smooth.nii.gz
+	T1_brain=${outDir}/${Name}_ss.nii.gz
+	
+
 	cd ${outDir} &&\
+
+	clobber ${T1_brain} &&\
 	SkullStrip $2 ${outDir} &&\
-	fslmaths $1 example_func &&\
-	fslmaths ${T1_brain} highres &&\
-	fslmaths $2 highres_head &&\
+	fslmaths ${T1_brain} highres
+
+	clobber example_func.nii.gz &&\
+	fslmaths $1 example_func
+
+	clobber highres_head.nii.gz &&\
+	fslmaths $2 highres_head
+
+	clobber standard standard_head standard_mask &&\
 	fslmaths ${FSLDIR}/data/standard/MNI152_T1_2mm_brain standard &&\
 	fslmaths ${FSLDIR}/data/standard/MNI152_T1_2mm standard_head &&\
-	fslmaths ${FSLDIR}/data/standard/MNI152_T1_2mm_brain_mask_dil standard_mask &&\
+	fslmaths ${FSLDIR}/data/standard/MNI152_T1_2mm_brain_mask_dil standard_mask
+
+	clobber example_func2highres* &&\
 	epi_reg --epi=example_func --t1=highres_head --t1brain=highres --out=example_func2highres &&\
-	convert_xfm -inverse -omat highres2example_func.mat example_func2highres.mat &&\
+	convert_xfm -inverse -omat highres2example_func.mat example_func2highres.mat
+
+	clobber highres2standard* &&\
 	flirt -in highres -ref standard -out highres2standard -omat highres2standard.mat -cost corratio -dof 12 -searchrx -90 90 -searchry -90 90 -searchrz -90 90 -interp trilinear &&\
 	fnirt --iout=highres2standard_head --in=highres_head --aff=highres2standard.mat --cout=highres2standard_warp --iout=highres2standard --jout=highres2highres_jac --config=T1_2_MNI152_2mm --ref=standard_head --refmask=standard_mask --warpres=10,10,10 &&\
 	applywarp -i highres -r standard -o highres2standard -w highres2standard_warp &&\
@@ -637,10 +689,16 @@ FindOutlierVols ${FLANKER_NIFTI} > ./logs/outlier_test.txt
 echo "Starting Motion Correction"
 FLANKER_MOTION_DIR=$(dirname ${FLANKER_NIFTI} | sed 's|$|/motion|')
 echo "Going to copy from ${FLANKER_MOTION_DIR}"
+#Not going to run 3dVolreg again since reconstruction.sh takes care of it
+mcName=${outDir}/mc/${FLANKER_NAME}_mc.nii.gz &&\
+clobber ${mcName} &&\
 cp ${FLANKER_MOTION_DIR}/* ${outDir}/mc/ &&\
 cp ${outDir}/mc/mcImg.par ${outDir}/mc/prefiltered_func_data_mcf.par &&\
 cp ${outDir}/mc/mcImg.nii.gz ${outDir}/mc/${FLANKER_NAME}_mc.nii.gz &&\
-mcName=${outDir}/mc/${FLANKER_NAME}_mc.nii.gz &&\
+
+#Still may need the middle volume
+Middle_Vol=${outDir}/mc/${Name}_Middle_Volume.nii.gz &&\
+clobber ${Middle_Vol} &&\
 GetMiddleVolume ${outDir}/mc/${FLANKER_NAME}_mc.nii.gz
 #MotionCorrection ${FLANKER_NIFTI} ${outDir}/mc 
 
@@ -661,9 +719,7 @@ Scale ${hpfName} ${mean_func} ${outDir}/scaled
 #For fsl processing
 cp ${scaleName} ${outDir}/filtered_func_data.nii.gz
 
-echo "registering the results"
-echo "this is the middle volume: ${Middle_Vol}"
-echo "this is the anat: ${Anat}"
+echo "registering the epi data to standard space"
 Registration_epi2std ${Middle_Vol} ${Anat} ${outDir}/reg
 echo "Finished Processing"
 
