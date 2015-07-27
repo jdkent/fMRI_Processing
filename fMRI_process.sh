@@ -28,7 +28,7 @@ declare -a cond_array
 declare -i cond_index
 cond_index=0
 clob=false
-while getopts "i:a:t:hc" OPTION; do
+while getopts "i:a:t:o:hc" OPTION; do
 	case $OPTION in
 		i)
 			FLANKER_NIFTI=$OPTARG
@@ -252,8 +252,7 @@ function GetMean()
 	mean_func=${outDir}/${Name}_mean_func.nii.gz
 
 	clobber ${mean_func} &&\
-
-	3dmerge -prefix ${mean_func} -doall -gmean $1 1>/dev/null
+	3dmerge -prefix ${mean_func} -doall -gmean $1 1>/dev/null &&\
 	fslstats ${mean_func} -k ${mask} -p 50 &&\
 	return 0
 	#else
@@ -359,6 +358,7 @@ function SkullStrip()
 # Purpose:
 #	Goes through each 3D image in a 4D Volume to find images with 
 #	a significant amount of voxels that are outliers
+#	See http://afni.nimh.nih.gov/pub/dist/doc/program_help/3dToutcount.html for how outliers are defined
 # Parameters:
 # 	$1=functional scan, 4D Volume
 # Produces:
@@ -484,6 +484,7 @@ function MakeMask()
 #	no further postconditions
 function HighPassFilter()
 {
+	#reason to do filtering: http://mindhive.mit.edu/node/116
 	if [ "$3" == "" ]; then
 		local outDir=$(dirname $1)
 	else
@@ -493,8 +494,13 @@ function HighPassFilter()
 	local Name=$(GetName $1)
 	hpfName=${outDir}/${Name}_hpf.nii.gz
 
+	#Adding the mean back in:
+	#http://afni.nimh.nih.gov/afni/community/board/read.php?1,84353,84356#msg-84356
 	clobber ${hpfName} &&\
-	/Volumes/VossLab/SoftwareDownloads/afni/3dBandpass -prefix ${hpfName} -mask $2  0.1  99999 $1 &&\
+	3dBandpass -prefix ${outDir}/tmp_bp.nii.gz -mask $2  0.1  99999 $1 &&\
+	3dTstat -mean -prefix ${outDir}/orig_mean.nii.gz $1 &&\
+	3dTstat -mean -prefix ${outDir}/bp_mean.nii.gz ${outDir}/tmp_bp.nii.gz &&\
+	3dcalc -a ${outDir}/tmp_bp.nii.gz -b ${outDir}/orig_mean.nii.gz -c ${outDir}/bp_mean.nii.gz -expr "a+b-c" -prefix ${hpfName} &&\
 	return 0
 	#else
 	return 1
@@ -533,10 +539,10 @@ function SpatialSmooth()
 	local mask=$2
 
 	mean_func=${outDir}/${Name}_mean_func.nii.gz
+	smoothName=${outDir}/${Name}_smooth.nii.gz
 	clobber ${mean_func} &&\
 	local mean=$(GetMean $1 $2 $3)
 	local brightness_threshold=$(echo "${mean}*0.75" | bc)
-	smoothName=${outDir}/${Name}_smooth.nii.gz
 	 #can't reference variable from other function?
 	
 	clobber ${smoothName} &&\
@@ -566,6 +572,8 @@ function SpatialSmooth()
 #			  > clobber
 # Postconditions:
 #	no further postconditions
+
+#NOT NEEDED
 function Scale()
 {
 	if [ "$3" == "" ]; then
@@ -611,12 +619,12 @@ function Registration_epi2std()
 	else
 		local outDir=$3
 	fi
+	local Name=$(GetName $1)
 	T1_mask=${outDir}/${Name}_bc_mask_60_smooth.nii.gz
 	T1_brain=${outDir}/${Name}_ss.nii.gz
 	
 
 	cd ${outDir} &&\
-
 	clobber ${T1_brain} &&\
 	SkullStrip $2 ${outDir} &&\
 	fslmaths ${T1_brain} highres
@@ -654,17 +662,42 @@ function Registration_epi2std()
 	#use epi_reg to get from epi to anat
 	#apply transforms?
 }
+function fsl_glm() {
 
+	filtered_func=$1
+
+	fslmaths ${filtered_func} -nan -mul 1000 ${filtered_func}
+	min_val=$(fslstats ${filtered_func} -R | awk {print $1})
+
+	film_gls -rn stats -sa -ms 5 
+
+}
+function Program_check() {
+	command_check=$(which "${1}")
+	if [ "${command_check}" == "" ]; then
+		echo "${1} is either not downloaded or not defined in your $PATH variable, please make the necessary changes and restart the script"
+		exit 1
+	fi
+	return 0
+}
 ###
 # END FUNCTIONS
 ###
 
 #MAIN SCRIPT
 ################################################################################################################
+#check to make sure all necessary commands are accessible
+#Can't run the script if these don't work
+Program_check fsl
+Program_check afni
+Program_check MBA.sh
+Program_check N4BiasFieldCorrection
 
 
 if [ "${outDir}" == "" ]; then
 	outDir=$(pwd)
+else
+	mkdir -p ${outDir}
 fi
 
 #strip the directory and file extension information from the file
@@ -676,11 +709,8 @@ mkdir -p ${outDir}/{smoothed,stats,mc,reg,logs,mask,hpf,scaled}
 cd ${outDir} #work from this directory
 
 
-############################################################
-# See if there are any weird outlier volumes in the dataset
-# find outlier volumes (i.e. before scanner has reached steady state, or periods of high movement)
-############################################################
-#See http://afni.nimh.nih.gov/pub/dist/doc/program_help/3dToutcount.html for how outliers are defined
+
+
 echo "Starting Analysis"
 clobber ./logs/outlier_test.txt &&\
 touch ./logs/outlier_test.txt &&\
@@ -714,11 +744,19 @@ SpatialSmooth ${masked_mc} ${mask} ${outDir}/smoothed
 
 echo "Starting Highpass Filtering"
 HighPassFilter ${smoothName} ${mask} ${outDir}/hpf
+#FSL Preprocessing (intnorm) see featlib.tcl
+normmean=10000
+median_intensity=$(fslstats ${mcName} -k ${mask} -p 50)
+scaling=$(echo "scale=16; ${normmean}/${median_intensity}" | bc)
+fslmaths ${hpfName} -mul ${scaling} ${outDir}/filtered_func_data.nii.gz
 
+
+#Not necessary since voxel are now gaurenteed to be above zero in highpass filtering
 echo "Scaling Voxel Time Series"
-Scale ${hpfName} ${mean_func} ${outDir}/scaled
+#Scale ${hpfName} ${mean_func} ${outDir}/scaled
 #For fsl processing
-cp ${scaleName} ${outDir}/filtered_func_data.nii.gz
+#cp ${scaleName} ${outDir}/filtered_func_data.nii.gz
+#fslmaths ${outDir}/filtered_func_data.nii.gz -add ${mask} -mul 1000 filtered_func_data.nii.gz
 
 echo "registering the epi data to standard space"
 Registration_epi2std ${Middle_Vol} ${Anat} ${outDir}/reg
