@@ -1,4 +1,14 @@
 #!/bin/bash
+
+function printHelp() {
+	echo "Usage: fsf_renaming.sh -f <filteredFunc> -t <TimingDir> -d <DesignFile> -s <SubNum> -o <outDir>"
+	echo "filteredFunc:			the preprocessed 4D image"
+	echo "TimingDir:			the directory where the timing onsets are defined"
+	echo "DesignFile:			the template design file (.fsf) being used"
+	echo "SubNum:				the subject number"
+	echo "outDir:				the name of the output directory"
+}
+
 while getopts "f:t:d:s:o:" OPTION; do
 	case $OPTION in
 		f)
@@ -17,7 +27,7 @@ while getopts "f:t:d:s:o:" OPTION; do
 			outDir=${OPTARG}
 			;;
 		h)
-			echo "this is help (uninitialized)"
+			printHelp
 			;;
 	esac
 done

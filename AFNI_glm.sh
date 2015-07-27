@@ -23,7 +23,7 @@ function clobber()
 declare -a cond_array
 declare -i cond_index
 cond_index=0
-while getopts "i:t:hc" OPTION; do
+while getopts "i:o:hc" OPTION; do
 	case $OPTION in
 		i)
 			FLANKER_NIFTI=$OPTARG
@@ -45,7 +45,7 @@ if [ "${outDir}" == "" ]; then
 	outDir=$(dirname $(dirname ${FLANKER_NIFTI}))
 fi
 
-workingDir=${outDir}/$(basename ${outDir}.AFNI)
+workingDir=$(dirname ${outDir})/$(basename ${outDir}.AFNI)
 mkdir -p ${workingDir}
 #Using motion file from reconstruct.sh
 
