@@ -736,7 +736,8 @@ GetMiddleVolume ${outDir}/mc/${FLANKER_NAME}_mc.nii.gz
 
 echo "Starting to make mask for epi data"
 MakeMask ${mcName} ${outDir}/mask
-
+#Moving mask to main directory for FSL
+mv ${mask} ${outDir}/mask.nii.gz
 
 echo "Starting Spatial Smoothing"
 SpatialSmooth ${masked_mc} ${mask} ${outDir}/smoothed
@@ -760,6 +761,9 @@ echo "Scaling Voxel Time Series"
 
 echo "registering the epi data to standard space"
 Registration_epi2std ${Middle_Vol} ${Anat} ${outDir}/reg
+
+
+
 echo "Finished Processing"
 
 echo "Run a glm script with "

@@ -101,7 +101,7 @@ motion_file=${outDir}/mc/mcImg_mm.par
 -glt_label 4 neu_ave -gltsym 'SYM: neu' \
 -glt_label 5 con-neu -gltsym 'SYM: +con -neu' \
 -glt_label 6 inc-neu -gltsym 'SYM: +inc -neu' \
--glt_label 7 inc-con -gltsym 'SYM: +inc -con' \
+-glt_label 7 con-inc -gltsym 'SYM: +con -inc' \
 -tout -fout -bucket sub${subNum}_bucket -xjpeg sub${subNum}_glm_matrix.jpg -x1D_stop
 
 3dREMLfit -matrix sub${subNum}_bucket.xmat.1D \

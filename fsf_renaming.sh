@@ -32,6 +32,7 @@ while getopts "f:t:d:s:o:" OPTION; do
 	esac
 done
 
+if 
 sed \
 -e "s|TEMPLATE_DATA|${FilteredFunc}|" \
 -e "s|CON_EV|${TimingDir}/s${SubNum}_con_fixdur.txt|" \
