@@ -53,7 +53,7 @@ mkdir -p ${workingDir}
 cd ${workingDir}
 
 #get the subject number from ${FLANKER_NIFTI}
-subNum=$(echo ${FLANKER_NIFTI} | egrep -o sub[0-9]+ | sed 's/sub//')
+subNum=$(echo $(basename ${FLANKER_NIFTI}) | egrep -o sub[0-9]+ | sed 's/sub//')
 
 
 #Assuming behavioral data is here: /Volumes/VossLab/Projects/PACR-AD/Imaging/BehavData/
