@@ -482,7 +482,7 @@ function MakeMask()
 #			  > clobber
 # Postconditions:
 #	no further postconditions
-function HighPassFilter()
+function HighPassFilter_AFNI()
 {
 	#reason to do filtering: http://mindhive.mit.edu/node/116
 	if [ "$3" == "" ]; then
@@ -497,10 +497,27 @@ function HighPassFilter()
 	#Adding the mean back in:
 	#http://afni.nimh.nih.gov/afni/community/board/read.php?1,84353,84356#msg-84356
 	clobber ${hpfName} &&\
-	3dBandpass -prefix ${outDir}/tmp_bp.nii.gz -mask $2  0.1  99999 $1 &&\
+	3dBandpass -prefix ${outDir}/tmp_bp.nii.gz -mask $2  0.01  99999 $1 &&\
 	3dTstat -mean -prefix ${outDir}/orig_mean.nii.gz $1 &&\
 	3dTstat -mean -prefix ${outDir}/bp_mean.nii.gz ${outDir}/tmp_bp.nii.gz &&\
 	3dcalc -a ${outDir}/tmp_bp.nii.gz -b ${outDir}/orig_mean.nii.gz -c ${outDir}/bp_mean.nii.gz -expr "a+b-c" -prefix ${hpfName} &&\
+	return 0
+	#else
+	return 1
+}
+function HighPassFilter_FSL()
+{
+	if [ "$3" == "" ]; then
+		local outDir=$(dirname $1)
+	else
+		local outDir=$3
+	fi
+
+	local Name=$(GetName $1)
+	hpfName=${outDir}/${Name}_hpf.nii.gz
+
+	clobber ${hpfName} &&\
+	fslmaths $1 -bptf 25.0 -1 ${hpfName} &&\
 	return 0
 	#else
 	return 1
@@ -744,7 +761,7 @@ SpatialSmooth ${masked_mc} ${mask} ${outDir}/smoothed
 
 
 echo "Starting Highpass Filtering"
-HighPassFilter ${smoothName} ${mask} ${outDir}/hpf
+HighPassFilter_AFNI ${smoothName} ${mask} ${outDir}/hpf
 #FSL Preprocessing (intnorm) see featlib.tcl
 normmean=10000
 median_intensity=$(fslstats ${mcName} -k ${mask} -p 50)
