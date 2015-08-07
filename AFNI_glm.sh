@@ -118,6 +118,13 @@ for output_index in $(seq 0 $((${#output_labels[@]}-1))); do
 	if [[ "${output_labels[${output_index}]}" == *Tstat ]]; then
 		clobber ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz &&\
 		3dmerge -1zscore -datum float -prefix ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz ${output_labels[${output_index}]}.nii.gz
+
+		clobber ${output_labels[${output_index}]/Tstat/Zstat_std}.nii.gz &&\
+		applywarp -i ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz \
+		-o ${output_labels[${output_index}]/Tstat/Zstat_std}.nii.gz \
+		-r ${FSLDIR}/data/standard/MNI152_T1_2mm_brain.nii.gz \
+		--premat=${outDir}/reg/example_func2highres.mat \
+		-w ${outDir}/reg/highres2standard_warp.nii.gz
 	fi
 done
 

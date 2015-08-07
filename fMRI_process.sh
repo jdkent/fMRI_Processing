@@ -756,7 +756,9 @@ function Registration_epi2std()
 
 	cd ${outDir} &&\
 	clobber ${T1_brain} &&\
-	SkullStrip $2 ${outDir} &&\
+	SkullStrip $2 ${outDir}
+
+	clobber highres &&\
 	fslmaths ${T1_brain} highres
 
 	clobber example_func.nii.gz &&\

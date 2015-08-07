@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -x
 
 function printHelp() {
 	echo "Usage: fsf_renaming.sh -f <filteredFunc> -t <TimingDir> -d <DesignFile> -s <SubNum> -o <outDir>"
@@ -7,9 +7,10 @@ function printHelp() {
 	echo "DesignFile:			the template design file (.fsf) being used"
 	echo "SubNum:				the subject number"
 	echo "outDir:				the name of the output directory"
+	exit 1
 }
 
-while getopts "f:t:d:s:o:" OPTION; do
+while getopts "f:t:d:s:o:h" OPTION; do
 	case $OPTION in
 		f)
 			FilteredFunc=${OPTARG}
@@ -29,10 +30,13 @@ while getopts "f:t:d:s:o:" OPTION; do
 		h)
 			printHelp
 			;;
+		*)
+			printHelp
+			;;
 	esac
 done
 
-if 
+
 sed \
 -e "s|TEMPLATE_DATA|${FilteredFunc}|" \
 -e "s|CON_EV|${TimingDir}/s${SubNum}_con_fixdur.txt|" \
