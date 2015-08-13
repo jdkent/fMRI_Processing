@@ -126,6 +126,15 @@ for output_index in $(seq 0 $((${#output_labels[@]}-1))); do
 		--premat=${outDir}/reg/example_func2highres.mat \
 		-w ${outDir}/reg/highres2standard_warp.nii.gz
 	fi
+
+	if [[ "${output_labels[${output_index}]}" == *Coef ]]; then
+		clobber ${output_labels[${output_index}]/Coef/Coef_std}.nii.gz &&\
+		applywarp -i ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz \
+		-o ${output_labels[${output_index}]/Coef/Coef_std}.nii.gz \
+		-r ${FSLDIR}/data/standard/MNI152_T1_2mm_brain.nii.gz \
+		--premat=${outDir}/reg/example_func2highres.mat \
+		-w ${outDir}/reg/highres2standard_warp.nii.gz
+	fi
 done
 
 #go back to directory the command was called in
