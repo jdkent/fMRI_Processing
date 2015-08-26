@@ -80,6 +80,25 @@ function find_max()
 	echo ${current_max}
 }
 
+function standard_deviation()
+{
+	local -a num_array
+	num_array=($(cat $1))
+
+	#using this as a global variable so I don't have to recalculate and have it available outside this function
+	mean=$(awk '{sum += $1; n++} END { if (n > 0) print sum / n; }' < $1)
+	local sum_of_squares=0
+	for number in ${num_array[@]}; do
+		sum_of_squares=$(echo "${sum_of_squares} + (${mean} - ${number})^2" | bc -l)
+	done
+
+	local stdev
+	stdev=$(echo "sqrt(${sum_of_squares}/${#num_array[@]})" | bc -l)
+	echo ${stdev}
+	return 0
+
+
+}
 function control_c 
 {
 	echo -e "\n## Caught SIGINT: Cleaning up before exit"
@@ -170,9 +189,11 @@ function command_check
 
 function printhelp
 {
-	echo "HRF_model.sh -i <filtered_func_data> -t <timing_file> -m <mask> -h (optional) -c (optional)"
+	echo "HRF_model.sh -i <filtered_func_data> -t <timing_file> -m <mask> -l <lower_bound> -u <upper_bound> -h (optional) -c (optional)"
 	echo "-i <filtered_func_data>: preprocessed 4d functional image"
 	echo "-t <timing_file>: The times the condition occured (single column, each time gets it's own line)"
+	echo "-l <lower_bound>: The number of volumes before the stimulus you want to observe"
+	echo "-u <upper_bound>: The number of volumes after the stimulus you want to observe"
 	echo "-h: displays this helpful message"
 	echo "-c: clobber (overwrites the output)"
 	echo "if you have any questions or comments please email james-kent@uiowa.edu"
@@ -295,57 +316,56 @@ for tim in $(cat "${timing_file}"); do
 		upper_bound=${Total_Volumes}
 	fi
 
+	file_tracker[${file_index}]=HRz_${volume_num}.txt
+	file_index=$(( ${file_index} + 1 ))
 	#get the raw data values
-	clobber HR_${volume_num}.txt &&\
+	clobber HRz_${volume_num}.txt &&\
 	for volume in $(seq ${lower_bound} ${upper_bound}); do
 		value=$(3dmaskave -mask ${mask} -quiet ${filtered_func_data}[${volume}])
-		echo ${value} >> HR_${volume_num}.txt
+		echo ${value} >> HRz_${volume_num}.txt
 	done
 	#Q: How is >> different from >?
 	#A: >> appends the output to a file, so that you can use it multiple times on the same file
 	#	and the output won't be overwritten, but > will overwrite whatever is in the file each time
 	#	it is called.
 	#keep track of all files in case user hits control+c and for file management
-	file_tracker[${file_index}]=HR_${volume_num}.txt
-	file_index=$(( ${file_index} + 1 ))
+	
 
 	#Normalize the data
-	max=$(find_max HR_${volume_num}.txt)
-	min=$(find_min HR_${volume_num}.txt)
+	#max=$(find_max HR_${volume_num}.txt)
+	#min=$(find_min HR_${volume_num}.txt)
+	stdev=$(standard_deviation HRz_${volume_num}.txt)
 
+	file_tracker[${file_index}]=HRz_${volume_num}_norm.txt
+	file_index=$(( ${file_index} + 1 ))
+	mean=$(awk '{sum += $1; n++} END { if (n > 0) print sum / n; }' < HRz_${volume_num}.txt)
 	declare -i temp_index=1
-	clobber HR_${volume_num}_norm.txt &&\
-	for num in $(cat HR_${volume_num}.txt); do
-		norm_num=$(echo "(${num}-${min})/(${max}-${min})" | bc -l)
-		#This is the volume when the stimulus was presented
-		#This is used to zero the response around stimulus onset
-		if [ ${temp_index} -eq 2 ]; then
-			zero_point=${norm_num}
-		fi
-		echo ${norm_num} >> HR_${volume_num}_norm.txt
+	clobber HRz_${volume_num}_norm.txt &&\
+	for num in $(cat HRz_${volume_num}.txt); do
+		norm_num=$(echo "((${num}-${mean})/${stdev})" | bc -l)
+		echo ${norm_num} >> HRz_${volume_num}_norm.txt
 		temp_index=$(( ${temp_index} + 1 ))
 	done
 	#again to keep track of files
-	file_tracker[${file_index}]=HR_${volume_num}_norm.txt
-	file_index=$(( ${file_index} + 1 ))
+	
 
 	#Zero the data on the onset
-	clobber HR_${volume_num}_zero.txt &&\
-	for num in $(cat HR_${volume_num}_norm.txt); do
-		echo "${num}-${zero_point}" | bc >> HR_${volume_num}_zero.txt
-	done
+	#clobber HR_${volume_num}_zero.txt &&\
+	#for num in $(cat HR_${volume_num}_norm.txt); do
+	#	echo "${num}-${zero_point}" | bc >> HRz_${volume_num}_zero.txt
+	#done
 	#still keeping track of files
-	file_tracker[${file_index}]=HR_${volume_num}_zero.txt
-	file_index=$(( ${file_index} + 1 ))
+	#file_tracker[${file_index}]=HRz_${volume_num}_zero.txt
+	#file_index=$(( ${file_index} + 1 ))
 
 
 done
 #visualization
-paste HR_*zero.txt > all_HR_zero.txt
-mkdir -p ./HR_files
-mv ${file_tracker[@]} ./HR_files
-awk '{sum=0; for(i=1; i<=NF; i++){sum+=$i}; sum/=NF; print sum}' all_HR_zero.txt > ave_HR_zero.txt &&\
-1dplot ave_HR_zero.txt &
+paste HRz_*norm.txt > all_HRz_norm.txt
+mkdir -p ./HRz_files
+mv ${file_tracker[@]} ./HRz_files
+awk '{sum=0; for(i=1; i<=NF; i++){sum+=$i}; sum/=NF; print sum}' all_HRz_norm.txt > ave_HRz_norm.txt &&\
+1dplot ave_HRz_norm.txt &
 #Q: What does the single ampersand '&' do?
 #A: runs the command in the background so you can run other commands from the terminal while
 #	this one is still running
