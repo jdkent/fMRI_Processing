@@ -294,7 +294,7 @@ declare -i file_index
 declare -a volume_array
 declare -i volume_index=-1
 declare -i volume_num
-for tim in $(cat "${timing_file}"); do
+for tim in $(cat "${timing_file}" | awk '{print $1}'); do
 	volume_num=$(echo "${tim}/${TR}" | bc) &&\
 	volume_index=$(( ${volume_index} + 1 )) &&\
 	volume_array[${volume_index}]=${volume_num}

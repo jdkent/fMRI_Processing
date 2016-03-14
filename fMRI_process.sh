@@ -1,4 +1,4 @@
-#!/bin/env bash
+#!/usr/bin/env bash
 ########################################################
 # Name: 
 #	fMRI_process.sh
@@ -14,8 +14,8 @@
 #	4D functional dataset that has been
 #	> Motion Corrected (AFNI)
 #	> Spatially Smoothed (FSL)
-#	> Highpass Filtered (AFNI)
-#	> temporally scaled (AFNI)
+#	> Highpass Filtered (AFNI) Now FSL
+#	> temporally scaled (AFNI) Not anymore
 #	> Registered to standard space (FSL)
 # Preconditions
 #	No further preconditions
@@ -30,7 +30,7 @@
 #set -o errexit #exits script when a command fails
 set -o pipefail #the exit status of a command that returned a non-zero exit code during a pipe
 set -o nounset #exit the script when you try to use undeclared variables
-set -o xtrace #prints out the commands a they are called, (for debugging)
+#set -o xtrace #prints out the commands a they are called, (for debugging)
 
 
 ############################################################
@@ -363,9 +363,8 @@ function GetMean()
 	local Name=$(GetName $1)
 	local mask=$2
 	mean_func=${outDir}/${Name}_mean_func.nii.gz
-
 	clobber ${mean_func} &&\
-	3dmerge -prefix ${mean_func} -doall -gmean $1 1>/dev/null &&\
+	3dmerge -prefix ${mean_func} -doall -gmean $1 1>/dev/null
 	fslstats ${mean_func} -k ${mask} -p 50 &&\
 	return 0
 	#else
@@ -451,11 +450,10 @@ function SkullStrip()
 	T1_mask=${outDir}/${Name}_bc_mask_60_smooth.nii.gz
 	T1_brain=${outDir}/${Name}_ss.nii.gz
 	
-
 	clobber ${biasCorrectName} &&\
 	BiasCorrect $1 ${outDir}
 	clobber ${T1_brain} &&\
-	MBA.sh -s ${biasCorrectName} -o ${outDir} -b /Volumes/VossLab*/Repositories/MBA_maps/brainPrior/Ave_brain.nii.gz -a /Volumes/VossLab*/Repositories/MBA_maps &&\
+	MBA.sh -s ${biasCorrectName} -o ${outDir} -b /Volumes/VossLab/Repositories/MBA_maps/brainPrior/Ave_brain.nii.gz -a /Volumes/VossLab/Repositories/MBA_maps &&\
 	3dcalc -a $1 -b ${T1_mask} -expr 'a*b' -prefix ${T1_brain} &&\
 	return 0
 	#else
@@ -671,7 +669,9 @@ function SpatialSmooth()
 	mean_func=${outDir}/${Name}_mean_func.nii.gz
 	smoothName=${outDir}/${Name}_smooth.nii.gz
 	clobber ${mean_func} &&\
-	local mean=$(GetMean $1 $2 $3)
+	GetMean $1 $2 $3
+	mean=$(GetMean $1 $2 $3)
+	echo "mean=${mean}"
 	local brightness_threshold=$(echo "${mean}*0.75" | bc)
 	 #can't reference variable from other function?
 	
@@ -832,6 +832,10 @@ else
 	mkdir -p ${outDir}
 fi
 
+#variables that must be defined/initialized
+#mask=${outDir}/mask/${mcName} ${Name}_mask.nii.gz
+
+
 #strip the directory and file extension information from the file
 FLANKER_NAME=$(GetName ${FLANKER_NIFTI})
 
@@ -860,8 +864,6 @@ cp ${outDir}/mc/mcImg.par ${outDir}/mc/prefiltered_func_data_mcf.par &&\
 cp ${outDir}/mc/mcImg.nii.gz ${outDir}/mc/${FLANKER_NAME}_mc.nii.gz
 
 #Still may need the middle volume
-Middle_Vol=${outDir}/mc/${FLANKER_NAME}_Middle_Volume.nii.gz &&\
-clobber ${Middle_Vol} &&\
 GetMiddleVolume ${outDir}/mc/${FLANKER_NAME}_mc.nii.gz ${outDir}/mc/
 #MotionCorrection ${FLANKER_NIFTI} ${outDir}/mc 
 
@@ -876,16 +878,17 @@ SpatialSmooth ${masked_mc} ${mask} ${outDir}/smoothed
 
 
 echo "Starting Highpass Filtering"
-HighPassFilter_AFNI ${smoothName} ${mask} ${outDir}/hpf
+HighPassFilter_FSL ${smoothName} ${mask} ${outDir}/hpf
 #FSL Preprocessing (intnorm) see featlib.tcl
-normmean=10000
-median_intensity=$(fslstats ${mcName} -k ${mask} -p 50)
-scaling=$(echo "scale=16; ${normmean}/${median_intensity}" | bc)
+clobber ${outDir}/filtered_func_data.nii.gz &&\
+normmean=10000 &&\
+median_intensity=$(fslstats ${mcName} -k ${mask} -p 50) &&\
+scaling=$(echo "scale=16; ${normmean}/${median_intensity}" | bc) &&\
 fslmaths ${hpfName} -mul ${scaling} ${outDir}/filtered_func_data.nii.gz
 
 
 #Not necessary since voxel are now gaurenteed to be above zero in highpass filtering
-echo "Scaling Voxel Time Series"
+#echo "Scaling Voxel Time Series"
 #Scale ${hpfName} ${mean_func} ${outDir}/scaled
 #For fsl processing
 #cp ${scaleName} ${outDir}/filtered_func_data.nii.gz
@@ -898,7 +901,6 @@ Registration_epi2std ${Middle_Vol} ${Anat} ${outDir}/reg
 
 echo "Finished Processing"
 
-echo "Run a glm script with "
 
 
 ###############################################

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+#Usage: HRF_model.sh -i <filtered_func_data> -t <timing_file> -m <mask> -l <lower_bound> -u <upper_bound> -h (optional) -c (optional)
+
 ############################################################
 # Bash Settings
 ############################################################

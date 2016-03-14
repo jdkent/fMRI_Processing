@@ -47,7 +47,7 @@ if [ -z "${outDir+z}" ]; then
 	outDir=$(dirname ${FLANKER_NIFTI})
 fi
 
-workingDir=$(dirname ${outDir})/$(basename ${outDir}.AFNI3)
+workingDir=$(dirname ${outDir})/$(basename ${outDir}.AFNI2)
 mkdir -p ${workingDir}
 #Using motion file from reconstruct.sh
 
@@ -75,15 +75,14 @@ done
 #1=errors
 #2=inc
 #3=neu
-1dBport -band 0 0.01 -input ${FLANKER_NIFTI} > ${workingDir}/highpass.1D
+
 #find the motion file
 motion_file=${outDir}/mc/mcImg_mm.par
 
-clobber sub${subNum}_bucket.REML_cmd sub${subNum}_bucket.xmat.1D sub${subNum}_bucket_REML+orig.BRIK	sub${subNum}_bucket_REML+orig.HEAD	sub${subNum}_bucket_REMLvar+orig.BRIK	sub${subNum}_bucket_REMLvar+orig.HEAD &&\
+clobber sub${subNum}_bucket+orig &&\
 3dDeconvolve -input ${FLANKER_NIFTI} \
--GOFORIT 2 \
 -nfirst 0 \
--polort 0 \
+-polort A \
 -num_stimts 10 \
 -mask ${outDir}/mask/*_mask.nii.gz \
 -stim_times 1 ${timing_array[0]} 'GAM(6.0024,0.9996)' -stim_label 1 con \
@@ -96,7 +95,7 @@ clobber sub${subNum}_bucket.REML_cmd sub${subNum}_bucket.xmat.1D sub${subNum}_bu
 -stim_file  8 ${motion_file}[3]		-stim_label 8 I_S \
 -stim_file  9 ${motion_file}[4]		-stim_label 9 R_L \
 -stim_file 10 ${motion_file}[5]		-stim_label 10 A_P \
--num_glt 8 \
+-num_glt 7 \
 -glt_label 1 con_ave -gltsym 'SYM: con' \
 -glt_label 2 errors_ave -gltsym 'SYM: errors' \
 -glt_label 3 inc_ave -gltsym 'SYM: inc' \
@@ -104,26 +103,24 @@ clobber sub${subNum}_bucket.REML_cmd sub${subNum}_bucket.xmat.1D sub${subNum}_bu
 -glt_label 5 con-neu -gltsym 'SYM: +con -neu' \
 -glt_label 6 inc-neu -gltsym 'SYM: +inc -neu' \
 -glt_label 7 con-inc -gltsym 'SYM: +con -inc' \
--glt_label 8 inc-con -gltsym 'SYM: +inc -con' \
--ortvec highpass.1D \
--tout -fout -bucket sub${subNum}_bucket -xjpeg sub${subNum}_glm_matrix.jpg -x1D_stop &&\
-3dREMLfit -matrix sub${subNum}_bucket.xmat.1D \
--GOFORIT 2 \
--input ${FLANKER_NIFTI} \
--mask ${outDir}/mask/*_mask.nii.gz \
--fout -tout -Rbuck sub${subNum}_bucket_REML -Rvar sub${subNum}_bucket_REMLvar -verb
+-tout -fout -bucket sub${subNum}_bucket -xjpeg sub${subNum}_glm_matrix.jpg 
+#-x1D_stop &&\
+#3dREMLfit -matrix sub${subNum}_bucket.xmat.1D \
+#-input ${FLANKER_NIFTI} \
+#-mask ${outDir}/mask/*_mask.nii.gz \
+#-fout -tout -Rbuck sub${subNum}_bucket_REML -Rvar sub${subNum}_bucket_REMLvar -verb
 
 
 declare -a output_labels
-output_labels=($(3dinfo -verb sub${subNum}_bucket_REML+orig | grep \#[0-9] | awk -F"'" '{print $2}'))
+output_labels=($(3dinfo -verb sub${subNum}_bucket+orig | grep \#[0-9] | awk -F"'" '{print $2}'))
 for output_index in $(seq 0 $((${#output_labels[@]}-1))); do
 	clobber ${output_labels[${output_index}]}.nii.gz &&\
-	3dcalc -float -a sub${subNum}_bucket_REML+orig[${output_index}] -expr 'a' -prefix ${output_labels[${output_index}]}.nii.gz
+	3dcalc -float -a sub${subNum}_bucket+orig[${output_index}] -expr 'a' -prefix ${output_labels[${output_index}]}.nii.gz
 	if [[ "${output_labels[${output_index}]}" == *Tstat ]]; then
 		clobber ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz &&\
 		dof=$(3dinfo ${output_labels[${output_index}]}.nii.gz | grep statpar | awk '{print $6}') &&\
 		3dcalc -a ${output_labels[${output_index}]}.nii.gz -expr 'fitt_t2z(a,299)' -prefix ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz
-		#same as 3dmerge -1zscore -datum float -prefix Zmap.nii Fmap.nii
+		#same as 3dmerge -1zscore -datum float -prefix Zmap.nii Tmap.nii
 
 		clobber ${output_labels[${output_index}]/Tstat/Zstat_std}.nii.gz &&\
 		applywarp -i ${output_labels[${output_index}]/Tstat/Zstat}.nii.gz \

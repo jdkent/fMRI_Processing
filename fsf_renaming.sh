@@ -36,7 +36,7 @@ while getopts "f:t:d:s:o:h" OPTION; do
 	esac
 done
 
-
+cond=$(basename ${TimingDir})
 sed \
 -e "s|TEMPLATE_DATA|${FilteredFunc}|" \
 -e "s|CON_EV|${TimingDir}/s${SubNum}_con_fixdur.txt|" \
@@ -44,5 +44,5 @@ sed \
 -e "s|NEU_EV|${TimingDir}/s${SubNum}_neu_fixdur.txt|" \
 -e "s|ERR_EV|${TimingDir}/s${SubNum}_errors_fixdur.txt|" \
 -e "s|OUTPUT_DIRECTORY|${outDir}|" \
-${DesignFile} > sub${SubNum}_design.fsf
+${DesignFile} > ${cond}_design.fsf
 
